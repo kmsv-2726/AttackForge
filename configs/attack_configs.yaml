@@ -1,9 +1,21 @@
 phishing:
   num_failed_logins: 10
-  attack_duration_minutes: 5
-  unusual_hour_start: 2
-  unusual_hour_end: 5
+  attack_duration_minutes: 30
+  unusual_hour_start: 0
+  unusual_hour_end: 6
   new_location_probability: 0.9
+  num_targets: 3
+  recon_events: 5
+  recon_duration_minutes: 30
+  takeover_duration_minutes: 20
+  lateral_attempts: 4
+  c2_ports: [4444, 8443, 1337, 9001]
+  suspicious_processes:
+    - svchost32.exe
+    - winlogon_helper.exe
+    - lsass_patch.exe
+    - update_helper.bat
+    - psexec.exe
 
 ransomware:
   num_file_events: 500

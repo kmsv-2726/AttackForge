@@ -4,32 +4,37 @@ import os
 import glob
 from sklearn.preprocessing import StandardScaler
 
+def get_latest_file(pattern):
+    """Return path to the most recently created file matching pattern."""
+    files = glob.glob(pattern)
+    if not files:
+        return None
+    return max(files, key=os.path.getctime)
+
 def load_logs(data_dir="data/attack_logs"):
     """
-    Load all attack log CSVs from data_dir into one DataFrame.
-    Also loads normal logs from data/normal_logs/.
-    Handles mismatched columns by using pd.concat + fillna.
+    Load only the LATEST normal log and latest attack log from each
+    attack type. Handles mismatched columns by using pd.concat + fillna.
     Returns a single combined DataFrame sorted by timestamp.
     """
-    all_dfs = []
+    dfs = []
     
-    # Load normal logs
-    normal_dir = "data/normal_logs"
-    if os.path.exists(normal_dir):
-        for f in glob.glob(os.path.join(normal_dir, "*.csv")):
-            all_dfs.append(pd.read_csv(f))
+    # Latest normal log
+    normal = get_latest_file("data/normal_logs/*.csv")
+    if normal:
+        dfs.append(pd.read_csv(normal))
             
-    # Load attack logs
-    if os.path.exists(data_dir):
-        for f in glob.glob(os.path.join(data_dir, "*.csv")):
-            all_dfs.append(pd.read_csv(f))
+    # Latest of each attack type
+    for attack_type in ["phishing", "ransomware", "insider_threat"]:
+        path = get_latest_file(f"{data_dir}/{attack_type}_logs_*.csv")
+        if path:
+            dfs.append(pd.read_csv(path))
             
-    if not all_dfs:
+    if not dfs:
         print("No log files found.")
         return pd.DataFrame()
         
-    # Concatenate all dataframes
-    combined_df = pd.concat(all_dfs, ignore_index=True)
+    combined_df = pd.concat(dfs, ignore_index=True)
     
     # Handle missing columns gracefully
     string_cols = combined_df.select_dtypes(include=['object', 'string']).columns
@@ -40,24 +45,28 @@ def load_logs(data_dir="data/attack_logs"):
     
     # Parse timestamp and sort
     combined_df['timestamp'] = pd.to_datetime(combined_df['timestamp'])
-    combined_df = combined_df.sort_values('timestamp').reset_index(drop=True)
+    combined_df['bytes_transferred'] = pd.to_numeric(combined_df.get('bytes_transferred', 0), errors='coerce').fillna(0)
     
-    return combined_df
+    return combined_df.sort_values('timestamp').reset_index(drop=True)
 
 def extract_features(df, window_minutes=5):
     """
     Slide a time window over the log DataFrame.
-    For each user in each window, compute the 8 features.
+    For each user in each window, compute the 9 features.
     Returns a new DataFrame where each row = one user-window.
     """
     if df.empty:
         return pd.DataFrame()
         
+    # BUG 2 FIX: Remove pre-authentication / no-user events
+    df = df[df['user_id'].notna()]
+    df = df[df['user_id'].astype(str).str.strip() != '-']
+    df = df[df['user_id'].astype(str).str.strip() != '']
+
     # Pre-process bytes_transferred
     df['bytes_transferred'] = pd.to_numeric(df.get('bytes_transferred', 0), errors='coerce').fillna(0)
     
     # Build a lookup dict BEFORE windowing:
-    # Use normal logs (label=0) to establish known IPs per user across the dataset
     user_known_ips = {}
     if 'source_ip' in df.columns:
         for user_id, group in df[df['label'] == 0].groupby('user_id'):
@@ -132,6 +141,7 @@ def extract_features(df, window_minutes=5):
             'hour_of_day': hour_of_day,
             'is_weekend': is_weekend,
             'new_ip_flag': new_ip_flag,
+            'event_burst_rate': len(group) / 300.0,
             'label': label,
             'attack_type': attack_type
         })
@@ -155,7 +165,7 @@ def preprocess(feature_df):
             
     feature_cols = ['login_count', 'failed_login_rate', 'unique_ips', 
                     'files_accessed_per_min', 'bytes_transferred', 'hour_of_day', 
-                    'is_weekend', 'new_ip_flag']
+                    'is_weekend', 'new_ip_flag', 'event_burst_rate']
                     
     X_df = feature_df[feature_cols].copy()
     y = feature_df['label'].astype(int).values
@@ -209,4 +219,4 @@ if __name__ == "__main__":
             
             save_features(features_df)
             print("Saved features to: data/features.csv")
-            print(f"Feature matrix shape: ({len(features_df)}, 8)")
+            print(f"Feature matrix shape: ({len(features_df)}, 9)")

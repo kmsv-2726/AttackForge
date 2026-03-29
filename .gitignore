@@ -1,15 +1,20 @@
+# Data files (Very large - do not push to GitHub)
+data/
+*.csv
+
+# Python byte-code
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Environments
 .venv/
 venv/
-.env
-# Ignore generated log files
-data/**/*.csv
+ENV/
 
-# Keep directory structure
-!data/
-!data/normal_logs/
-!data/attack_logs/
-!data/**/.gitkeep
-.ipynb_checkpoints/
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Config sensitive data (if any)
+*.log

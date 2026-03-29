@@ -12,6 +12,7 @@ fake = Faker()
 BASE_FIELDS = [
     'timestamp', 'event_id', 'event_type', 
     'user_id', 'source_ip', 'hostname', 
+    'department',
     'label', 'attack_type'
 ]
 
@@ -52,8 +53,8 @@ def create_event(timestamp, user_id, source_ip, hostname):
     Returns:
         dict: A single log entry with all required base fields.
     """
-    # Pick a random event type from our list of benign activities
     event_type = random.choice(EVENT_TYPES)
+    department = random.choice(['Engineering', 'Marketing', 'Sales', 'HR', 'Finance'])
     
     return {
         'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
@@ -62,6 +63,7 @@ def create_event(timestamp, user_id, source_ip, hostname):
         'user_id': user_id,
         'source_ip': source_ip,
         'hostname': hostname,
+        'department': department,
         'label': 0,              # 0 means normal activity
         'attack_type': 'none'    # No attack for this week
     }

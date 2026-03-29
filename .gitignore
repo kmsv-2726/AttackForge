@@ -4,5 +4,12 @@ __pycache__/
 .venv/
 venv/
 .env
-data/
+# Ignore generated log files
+data/**/*.csv
+
+# Keep directory structure
+!data/
+!data/normal_logs/
+!data/attack_logs/
+!data/**/.gitkeep
 .ipynb_checkpoints/

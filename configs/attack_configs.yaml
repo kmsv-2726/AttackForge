@@ -1,0 +1,20 @@
+phishing:
+  num_failed_logins: 10
+  attack_duration_minutes: 5
+  unusual_hour_start: 2
+  unusual_hour_end: 5
+  new_location_probability: 0.9
+
+ransomware:
+  num_file_events: 500
+  burst_duration_seconds: 60
+  file_rename_probability: 0.2
+  target_extensions: ['.docx', '.xlsx', '.pdf', '.txt']
+
+insider_threat:
+  num_files_accessed: 200
+  bytes_per_transfer: 104857600
+  attack_duration_minutes: 10
+  unusual_hour_start: 20
+  unusual_hour_end: 6
+  cross_department_probability: 0.8

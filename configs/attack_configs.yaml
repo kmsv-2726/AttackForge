@@ -18,15 +18,37 @@ phishing:
     - psexec.exe
 
 ransomware:
+  # existing Week 2 params stay
   num_file_events: 500
-  burst_duration_seconds: 60
-  file_rename_probability: 0.2
-  target_extensions: ['.docx', '.xlsx', '.pdf', '.txt']
+  burst_duration_seconds: 90
+  file_rename_probability: 0.9
+  target_extensions: [".docx", ".xlsx", ".pdf", ".jpg", ".py", ".csv", ".db"]
+
+  # NEW Week 4 params
+  delivery_processes: ["update.exe", "installer.tmp", "flash_update.exe"]
+  discovery_min_files: 50
+  discovery_max_files: 150
+  discovery_window_seconds: 90
+  encryption_window_seconds: 120
+  c2_ports: [4444, 8443, 443]
+  suspicious_processes: ["svchost_fake.exe", "winlogon_helper.exe", "lsass_patch.exe"]
 
 insider_threat:
-  num_files_accessed: 200
-  bytes_per_transfer: 104857600
-  attack_duration_minutes: 10
+  # existing Week 2 params stay
+  num_files_accessed: 50
+  bytes_per_transfer: 1000000
+  attack_duration_minutes: 60
   unusual_hour_start: 20
   unusual_hour_end: 6
-  cross_department_probability: 0.8
+  cross_department_probability: 0.9
+
+  # NEW Week 4 params
+  preparation_files: 5
+  staging_min_files: 20
+  staging_max_files: 60
+  exfil_method: "usb"          # "usb" or "cloud"
+  usb_min_files: 10
+  usb_max_files: 30
+  cover_min_deletes: 3
+  cover_max_deletes: 8
+  cover_processes: ["wevtutil.exe", "clearlog.bat", "powershell.exe"]

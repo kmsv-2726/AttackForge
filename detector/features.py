@@ -13,22 +13,21 @@ def get_latest_file(pattern):
 
 def load_logs(data_dir="data/attack_logs"):
     """
-    Load only the LATEST normal log and latest attack log from each
-    attack type. Handles mismatched columns by using pd.concat + fillna.
+    Load all normal log CSVs and all attack log CSVs.
+    Handles mismatched columns by using pd.concat + fillna.
     Returns a single combined DataFrame sorted by timestamp.
     """
     dfs = []
     
-    # Latest normal log
-    normal = get_latest_file("data/normal_logs/*.csv")
-    if normal:
-        dfs.append(pd.read_csv(normal))
+    # Load all normal logs
+    normal_pattern = "data/normal_logs/*.csv"
+    for f in glob.glob(normal_pattern):
+        dfs.append(pd.read_csv(f))
             
-    # Latest of each attack type
-    for attack_type in ["phishing", "ransomware", "insider_threat"]:
-        path = get_latest_file(f"{data_dir}/{attack_type}_logs_*.csv")
-        if path:
-            dfs.append(pd.read_csv(path))
+    # Load all attack logs
+    attack_pattern = f"{data_dir}/*.csv"
+    for f in glob.glob(attack_pattern):
+        dfs.append(pd.read_csv(f))
             
     if not dfs:
         print("No log files found.")
@@ -150,37 +149,33 @@ def extract_features(df, window_minutes=5):
 
 def preprocess(feature_df):
     """
-    Prepare the feature DataFrame for ML training.
-    Steps:
-      1. Fill any remaining NaN with 0
-      2. Convert boolean columns to int (is_weekend, new_ip_flag)
-      3. Scale numeric features using sklearn StandardScaler, fitting only on normal data
-      4. Return: X (feature matrix), y (labels), scaler (fitted)
+    Prepare feature DataFrame for ML.
+    CRITICAL: scaler must be fit on label=0 rows only.
+    This prevents attack feature values from warping the scale,
+    which is data leakage — in production you never have attack
+    labels at scaling time.
     """
-    feature_df = feature_df.fillna(0)
-    
-    for col in ['is_weekend', 'new_ip_flag']:
-        if col in feature_df.columns:
-            feature_df[col] = feature_df[col].astype(int)
-            
-    feature_cols = ['login_count', 'failed_login_rate', 'unique_ips', 
-                    'files_accessed_per_min', 'bytes_transferred', 'hour_of_day', 
-                    'is_weekend', 'new_ip_flag', 'event_burst_rate']
-                    
-    X_df = feature_df[feature_cols].copy()
-    y = feature_df['label'].astype(int).values
-    
-    scaler = StandardScaler()
-    
-    # Fit scaler ONLY on normal data (label=0) to avoid data leakage
-    normal_windows = feature_df[feature_df['label'] == 0]
-    if len(normal_windows) > 0:
-        scaler.fit(normal_windows[feature_cols])
-    else:
-        scaler.fit(X_df)
-        
-    X_scaled = scaler.transform(X_df)
-    
+    feature_cols = [
+        'login_count', 'failed_login_rate', 'unique_ips',
+        'files_accessed_per_min', 'bytes_transferred',
+        'hour_of_day', 'is_weekend', 'new_ip_flag',
+        'event_burst_rate'
+    ]
+
+    df = feature_df.copy()
+    df[feature_cols] = df[feature_cols].fillna(0)
+    df['is_weekend']   = df['is_weekend'].astype(int)
+    df['new_ip_flag']  = df['new_ip_flag'].astype(int)
+
+    X = df[feature_cols].values
+    y = df['label'].values
+
+    # FIT SCALER ON NORMAL ROWS ONLY — this is the critical fix
+    from sklearn.preprocessing import RobustScaler
+    scaler = RobustScaler()                  # handles zero-heavy columns
+    scaler.fit(X[y == 0])                   # ONLY normal rows
+    X_scaled = scaler.transform(X)          # transform ALL rows
+
     return X_scaled, y, scaler
 
 def save_features(feature_df, output_path="data/features.csv"):

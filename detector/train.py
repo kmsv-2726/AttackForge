@@ -28,7 +28,14 @@ def main():
     # Unsupervised learning: extract ONLY the normal rows from the training set
     X_train_normal = X_train[y_train == 0]
     
-    detector = AnomalyDetector(contamination=0.02)
+    # Calculate real attack rate from training data
+    real_attack_rate = y_train.mean()
+    # Clamp between 0.005 and 0.05 (IsolationForest valid range)
+    contamination = float(np.clip(real_attack_rate, 0.005, 0.05))
+    print(f"  Tuned contamination: {contamination:.4f} "
+          f"(real attack rate: {real_attack_rate:.4f})")
+
+    detector = AnomalyDetector(contamination=contamination)
     detector.fit(X_train_normal)
     
     print("Step 4 — Predict on test set")

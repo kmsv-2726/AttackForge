@@ -20,17 +20,31 @@ class AnomalyDetector:
         Built into scikit-learn.
     """
 
-    def __init__(self, contamination=0.02, n_estimators=100, random_state=42):
+    def __init__(self,
+                 contamination=0.01,
+                 n_estimators=200,      # was 100 — more trees = better boundary
+                 max_samples=0.8,       # was 'auto' — subsample 80% per tree
+                 max_features=0.8,      # was 1.0 — use 80% of features per tree
+                 random_state=42):
         """
-        Args:
-            contamination: expected fraction of anomalies in data
-                           Set to ~0.02 matching our ~2% attack rate.
-            n_estimators:  number of trees in the forest.
-            random_state:  for reproducibility.
+        Isolation Forest anomaly detector with tuned hyperparameters.
+
+        n_estimators=200: more trees give a smoother anomaly boundary,
+          especially important when attack examples are sparse.
+
+        max_samples=0.8: each tree trains on 80% of data, reducing
+          overfitting to the dominant normal class.
+
+        max_features=0.8: each tree sees 80% of features, making the
+          ensemble more robust to noisy features like login_count
+          which barely differs between normal and attack.
         """
+        from sklearn.ensemble import IsolationForest
         self.model = IsolationForest(
             contamination=contamination,
             n_estimators=n_estimators,
+            max_samples=max_samples,
+            max_features=max_features,
             random_state=random_state
         )
 

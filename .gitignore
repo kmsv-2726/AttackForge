@@ -16,5 +16,8 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Config sensitive data (if any)
+# Config and local reports
 *.log
+models/
+results.txt
+results_unbuffered.txt

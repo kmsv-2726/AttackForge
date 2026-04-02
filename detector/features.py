@@ -11,42 +11,38 @@ def get_latest_file(pattern):
         return None
     return max(files, key=os.path.getctime)
 
-def load_logs(data_dir="data/attack_logs"):
+def load_logs():
     """
-    Load all normal log CSVs and all attack log CSVs.
-    Handles mismatched columns by using pd.concat + fillna.
-    Returns a single combined DataFrame sorted by timestamp.
+    Load ALL normal and attack log CSVs and combine them.
+    Deduplicates by event_id so re-running does not create
+    duplicate rows from overlapping scenario runs.
     """
+    import glob, os
     dfs = []
-    
-    # Load all normal logs
-    normal_pattern = "data/normal_logs/*.csv"
-    for f in glob.glob(normal_pattern):
-        dfs.append(pd.read_csv(f))
-            
-    # Load all attack logs
-    attack_pattern = f"{data_dir}/*.csv"
-    for f in glob.glob(attack_pattern):
-        dfs.append(pd.read_csv(f))
-            
+
+    # Load ALL normal logs
+    for path in glob.glob("data/normal_logs/*.csv"):
+        dfs.append(pd.read_csv(path))
+
+    # Load ALL attack logs
+    for path in glob.glob("data/attack_logs/*.csv"):
+        dfs.append(pd.read_csv(path))
+
     if not dfs:
-        print("No log files found.")
-        return pd.DataFrame()
-        
-    combined_df = pd.concat(dfs, ignore_index=True)
-    
-    # Handle missing columns gracefully
-    string_cols = combined_df.select_dtypes(include=['object', 'string']).columns
-    numeric_cols = combined_df.select_dtypes(include=[np.number]).columns
-    
-    combined_df[string_cols] = combined_df[string_cols].fillna('')
-    combined_df[numeric_cols] = combined_df[numeric_cols].fillna(0)
-    
-    # Parse timestamp and sort
-    combined_df['timestamp'] = pd.to_datetime(combined_df['timestamp'])
-    combined_df['bytes_transferred'] = pd.to_numeric(combined_df.get('bytes_transferred', 0), errors='coerce').fillna(0)
-    
-    return combined_df.sort_values('timestamp').reset_index(drop=True)
+        raise FileNotFoundError("No log CSVs found. Run scenario_runner.py first.")
+
+    combined = pd.concat(dfs, ignore_index=True)
+
+    # Deduplicate — same event_id appearing in multiple runs
+    # should only be counted once
+    combined = combined.drop_duplicates(subset=['event_id'])
+
+    combined['timestamp'] = pd.to_datetime(combined['timestamp'])
+    combined['bytes_transferred'] = pd.to_numeric(
+        combined['bytes_transferred'], errors='coerce'
+    ).fillna(0)
+    combined = combined.fillna('')
+    return combined.sort_values('timestamp').reset_index(drop=True)
 
 def extract_features(df, window_minutes=5):
     """
@@ -105,7 +101,11 @@ def extract_features(df, window_minutes=5):
         files_accessed_per_min = len(file_events) / window_minutes
         
         # 5. bytes_transferred
-        bytes_transferred = group['bytes_transferred'].sum()
+        bytes_val = group['bytes_transferred'].sum()
+        
+        # IMPROVEMENT 2: Log-transform bytes_transferred before scaling
+        # Compress range: 0 -> 0, 191M -> ~19.1
+        bytes_val = np.log1p(bytes_val)
         
         # 6 & 7. hour_of_day & is_weekend
         hour_of_day = group['timestamp'].iloc[0].hour
@@ -136,7 +136,7 @@ def extract_features(df, window_minutes=5):
             'failed_login_rate': failed_login_rate,
             'unique_ips': unique_ips,
             'files_accessed_per_min': files_accessed_per_min,
-            'bytes_transferred': bytes_transferred,
+            'bytes_transferred': bytes_val,
             'hour_of_day': hour_of_day,
             'is_weekend': is_weekend,
             'new_ip_flag': new_ip_flag,

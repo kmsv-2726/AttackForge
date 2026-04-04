@@ -96,20 +96,121 @@ def main():
     detector.save("models/anomaly_detector.pkl")
     print("Model saved to models/anomaly_detector.pkl")
     
-    print("Step 7 — Plot ROC curve")
-    fpr, tpr, _ = roc_curve(y_test, anomaly_scores)
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, label=f'Isolation Forest (AUC={auc:.3f})')
-    plt.plot([0,1],[0,1],'--', color='gray', label='Random baseline')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate (Recall)')
-    plt.title('ROC Curve — Anomaly Detector')
-    plt.legend()
+    print("Step 7 — Supervised Classifier (Week 7)")
+    auc_if = auc
+
+    print("\n" + "═"*42)
+    print("  WEEK 7 — SUPERVISED CLASSIFIER")
+    print("═"*42)
+
+    # Step A — Train on ALL labeled data (normal + attack)
+    # Unlike Week 6, we give this model attack examples to learn from
+    feature_cols = [
+        'login_count', 'failed_login_rate', 'unique_ips',
+        'files_accessed_per_min', 'bytes_transferred',
+        'hour_of_day', 'is_weekend', 'new_ip_flag',
+        'event_burst_rate'
+    ]
+
+    from detector.model import SupervisedDetector
+    clf = SupervisedDetector(n_estimators=200, class_weight='balanced', random_state=42)
+    clf.fit(X_train, y_train, feature_names=feature_cols)
+    print("Supervised classifier trained on both normal and attack windows.")
+    print(f"  Training set: {(y_train==0).sum()} normal + "
+          f"{(y_train==1).sum()} attack windows")
+
+    # Step B — Predict on test set
+    y_pred_clf   = clf.predict(X_test)
+    y_proba_clf  = clf.predict_proba(X_test)
+
+    # Step C — Evaluate
+    prec_clf = precision_score(y_test, y_pred_clf, zero_division=0)
+    rec_clf  = recall_score(y_test, y_pred_clf, zero_division=0)
+    f1_clf   = f1_score(y_test, y_pred_clf, zero_division=0)
+    auc_clf  = roc_auc_score(y_test, y_proba_clf)
+    cm_clf   = confusion_matrix(y_test, y_pred_clf)
+
+    print("\n══════════════════════════════════════════")
+    print("  SUPERVISED CLASSIFIER — EVALUATION REPORT")
+    print("══════════════════════════════════════════")
+
+    print(f"\nTraining set:   {len(y_train):<4} windows  (normal + attack both)")
+    print(f"Test set:       {len(y_test):<4} windows")
+    print(f"  Normal:       {np.sum(y_test == 0):<4}  ({np.sum(y_test == 0)/len(y_test)*100:.1f}%)")
+    print(f"  Attack:       {np.sum(y_test == 1):<4}  ({np.sum(y_test == 1)/len(y_test)*100:.1f}%)")
+
+    print("\n── Detection Results ───────────────────")
+    print(f"  Precision:    {prec_clf:.2f}")
+    print(f"  Recall:       {rec_clf:.2f}")
+    print(f"  F1 Score:     {f1_clf:.2f}")
+    print(f"  ROC-AUC:      {auc_clf:.2f}")
+
+    print("\n── Confusion Matrix ────────────────────")
+    print("                  Predicted Normal  Predicted Attack")
+    print(f"  Actual Normal        {cm_clf[0,0]:<4}               {cm_clf[0,1]:<4}")
+    print(f"  Actual Attack        {cm_clf[1,0]:<4}               {cm_clf[1,1]:<4}")
+
+    print("\n── Per Attack-Type Recall ──────────────")
+    for atype in ['phishing', 'ransomware', 'insider_threat']:
+        mask = (df_test['attack_type'] == atype)
+        total_atype = mask.sum()
+        if total_atype > 0:
+            caught_atype = np.sum((y_test[mask] == 1) & (y_pred_clf[mask] == 1))
+            print(f"  {atype:<14}: {caught_atype}/{total_atype} caught  ({caught_atype/total_atype*100:.1f}%)")
+        else:
+            print(f"  {atype:<14}: 0/0 caught  (0.0%)")
+
+    print("\n── Feature Importance ──────────────────")
+    print("  (top 5 features by importance score)")
+    importances = clf.feature_importances()
+    for feat, imp in sorted(importances.items(), key=lambda x: -x[1])[:5]:
+        print(f"  {feat:<24}: {imp:.3f}")
+
+    print("\n══════════════════════════════════════════")
+    print("  MODEL COMPARISON — WEEK 6 vs WEEK 7")
+    print("══════════════════════════════════════════")
+
+    print("\n                    Isolation Forest    Random Forest")
+    print("                    (unsupervised)      (supervised)")
+    print("  ─────────────────────────────────────────────────")
+    print(f"  ROC-AUC           {auc_if:.2f}                {auc_clf:.2f}")
+    print(f"  Precision         {precision:.2f}                {prec_clf:.2f}")
+    print(f"  Recall            {recall:.2f}                {rec_clf:.2f}")
+    print(f"  F1 Score          {f1:.2f}                {f1_clf:.2f}")
+    print("  ─────────────────────────────────────────────────")
+    print("  Saw attack        NO                  YES")
+    print("  examples during")
+    print("  training?")
+    print(f"\n  AUC improvement from supervised learning: +{(auc_clf-auc_if):.2f}")
+    print("  This improvement is the core research finding.")
+    print("  It quantifies how much labeled attack data matters.\n")
+    print("══════════════════════════════════════════\n")
+
+    print("Step 8 — Plot ROC curve")
+    fpr_if, tpr_if, _ = roc_curve(y_test, anomaly_scores)
+    fpr_rf, tpr_rf, _ = roc_curve(y_test, y_proba_clf)
+
+    plt.figure(figsize=(9, 6))
+    plt.plot(fpr_if, tpr_if,
+             label=f'Isolation Forest — unsupervised (AUC={auc_if:.3f})',
+             color='steelblue', linewidth=2)
+    plt.plot(fpr_rf, tpr_rf,
+             label=f'Random Forest — supervised (AUC={auc_clf:.3f})',
+             color='darkorange', linewidth=2)
+    plt.plot([0,1],[0,1],'--', color='gray', label='Random baseline', linewidth=1)
+    plt.fill_between(fpr_rf, tpr_rf, alpha=0.08, color='darkorange')
+    plt.xlabel('False Positive Rate', fontsize=12)
+    plt.ylabel('True Positive Rate (Recall)', fontsize=12)
+    plt.title('ROC Curve — Anomaly vs Supervised Detector', fontsize=13)
+    plt.legend(fontsize=11)
     plt.tight_layout()
     
     os.makedirs("models", exist_ok=True)
-    plt.savefig('models/roc_curve_anomaly.png')
-    print("ROC curve saved to models/roc_curve_anomaly.png")
+    plt.savefig('models/roc_curve_comparison.png', dpi=150)
+    print("Comparison ROC curve saved to models/roc_curve_comparison.png")
+
+    clf.save("models/supervised_detector.pkl")
+    print("Supervised model saved to models/supervised_detector.pkl")
 
 if __name__ == "__main__":
     main()

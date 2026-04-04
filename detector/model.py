@@ -84,3 +84,93 @@ class AnomalyDetector:
     def load(self, path="models/anomaly_detector.pkl"):
         """Load a saved model from disk."""
         self.model = joblib.load(path)
+
+class SupervisedDetector:
+    """
+    Supervised attack classifier using Random Forest.
+
+    How it works:
+        Trains on BOTH normal (label=0) AND attack (label=1) windows.
+        Learns the specific patterns that distinguish each attack type.
+        At inference time, outputs a probability that a window is
+        an attack — higher probability = more confident it is an attack.
+
+    Why Random Forest:
+        Handles imbalanced classes well (we have ~98% normal, ~2% attack).
+        Gives feature importance scores — tells us WHICH features
+        matter most for detecting each attack type.
+        Robust to outliers and noisy features.
+        No assumptions about feature distributions (unlike logistic regression).
+        Built into scikit-learn, fast to train.
+
+    Why this beats Isolation Forest:
+        It has seen attack examples. It knows what AUTH_FAIL spikes,
+        file encryption bursts, and after-hours access look like.
+        Isolation Forest had to guess. This model knows.
+    """
+
+    def __init__(self, n_estimators=200, max_depth=None,
+                 class_weight='balanced', random_state=42):
+        """
+        Args:
+            n_estimators:  number of trees. 200 gives stable results.
+            max_depth:     None = grow full trees. Captures complex patterns.
+            class_weight:  'balanced' automatically weights the minority
+                           class (attacks) higher to compensate for
+                           the ~98/2 normal/attack imbalance.
+            random_state:  for reproducibility.
+        """
+        from sklearn.ensemble import RandomForestClassifier
+        self.model = RandomForestClassifier(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            class_weight=class_weight,
+            random_state=random_state
+        )
+        self.feature_names = None
+
+    def fit(self, X_train, y_train, feature_names=None):
+        """
+        Train on labeled data — both normal and attack windows.
+        X_train: feature matrix (all rows, normal and attack)
+        y_train: labels (0=normal, 1=attack)
+        feature_names: list of feature column names for importance plot
+        """
+        self.feature_names = feature_names
+        self.model.fit(X_train, y_train)
+
+    def predict(self, X):
+        """
+        Predict 0 (normal) or 1 (attack) for each window.
+        """
+        return self.model.predict(X)
+
+    def predict_proba(self, X):
+        """
+        Return attack probability for each window (0.0 to 1.0).
+        Used for ROC-AUC calculation and threshold tuning.
+        Returns the probability of class 1 (attack).
+        """
+        return self.model.predict_proba(X)[:, 1]
+
+    def feature_importances(self):
+        """
+        Return a dict of {feature_name: importance_score}.
+        Higher score = more useful for detecting attacks.
+        """
+        if self.feature_names is None:
+            return dict(enumerate(self.model.feature_importances_))
+        return dict(zip(self.feature_names, self.model.feature_importances_))
+
+    def save(self, path="models/supervised_detector.pkl"):
+        """Save the trained model to disk using joblib."""
+        import joblib, os
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        joblib.dump(self, path)
+
+    def load(self, path="models/supervised_detector.pkl"):
+        """Load a saved model from disk."""
+        import joblib
+        loaded = joblib.load(path)
+        self.model = loaded.model
+        self.feature_names = loaded.feature_names

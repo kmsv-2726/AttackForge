@@ -19,5 +19,7 @@ Thumbs.db
 # Config and local reports
 *.log
 models/
+evaluation/*.txt
+evaluation/*.png
 results.txt
 results_unbuffered.txt

@@ -1,9 +1,21 @@
-# Data files (Very large - do not push to GitHub)
-data/
-*.csv
+# Data and Logs
+data/*.csv
+data/normal_logs/*.csv
+data/attack_logs/*.csv
+data/features.csv
 
-# Python byte-code
+# Evaluation & Visualization
+evaluation/visuals/*.png
+evaluation/report.txt
+notebooks/.ipynb_checkpoints/
+
+# Models
+models/*.pkl
+
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
 *.py[cod]
 *$py.class
 

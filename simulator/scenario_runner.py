@@ -19,10 +19,17 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_file = os.path.join('data', 'normal_logs', f'normal_logs_{timestamp}.csv')
     
-    # We pass num_events=5000 per the prompt's instruction ("Produces 5000 rows...")
-    generate_normal_logs(out_file, num_events=5000)
+    # Randomize background traffic volume (2k to 10k events)
+    import random
+    num_normal = random.randint(2000, 10000)
+    print(f"  Target volume: {num_normal} normal events")
+    generate_normal_logs(out_file, num_events=num_normal)
     
     print("\nStep 2: Injecting attacks...")
+    # Randomly pick an intensity for this run: stealthy, balanced, or aggressive
+    intensity = random.choice([0.5, 1.0, 1.5, 2.0])
+    print(f"  Simulation Intensity: {intensity}x")
+
     attacks_to_run = []
     if args.attack == 'all':
         attacks_to_run = [phishing, ransomware, insider_threat]
@@ -35,7 +42,12 @@ def main():
         
     for attack_module in attacks_to_run:
         print(f"\nRunning {attack_module.__name__} injection...")
-        attack_module.main()
+        # We'll pass the intensity to the main function if supported
+        try:
+            attack_module.main(intensity=intensity)
+        except TypeError:
+            # Fallback if module main hasn't been updated yet
+            attack_module.main()
         
     print("\n[DONE] Scenario extraction and injection complete.")
 

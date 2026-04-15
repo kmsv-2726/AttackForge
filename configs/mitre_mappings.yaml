@@ -1,0 +1,37 @@
+phishing:
+  DNS_LOOKUP:
+    tactic: "Reconnaissance"
+    technique: "Active Scanning"
+    technique_id: "T1595"
+  
+  AUTH_FAIL:
+    tactic: "Credential Access"
+    technique: "Brute Force"
+    technique_id: "T1110"
+  
+  LOGIN:
+    tactic: "Initial Access"
+    technique: "Valid Accounts"
+    technique_id: "T1078"
+    
+ransomware:
+  FILE_ACCESS:
+    tactic: "Collection"
+    technique: "Data from Local System"
+    technique_id: "T1005"
+  
+  FILE_WRITE:
+    tactic: "Impact"
+    technique: "Data Encrypted for Impact"
+    technique_id: "T1486"
+
+insider_threat:
+  FILE_ACCESS:
+    tactic: "Collection"
+    technique: "Data from Network Shared Drive"
+    technique_id: "T1039"
+  
+  USB_CONNECT:
+    tactic: "Exfiltration"
+    technique: "Exfiltration Over Physical Medium"
+    technique_id: "T1052"

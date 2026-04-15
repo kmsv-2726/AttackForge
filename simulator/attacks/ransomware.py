@@ -263,9 +263,15 @@ class RansomwareScenario:
         self.stats['impact'] = len(events)
         return events
 
-def main():
+def main(intensity=1.0):
     """Main execution block for full ransomware scenario injection."""
     config = load_config()
+    
+    # Scale config parameters by intensity
+    if intensity != 1.0:
+        config['discovery_min_files'] = max(10, int(config.get('discovery_min_files', 50) * intensity))
+        config['discovery_max_files'] = max(20, int(config.get('discovery_max_files', 150) * intensity))
+
     input_csv = get_latest_normal_log()
     
     df_normal = pd.read_csv(input_csv)
@@ -273,6 +279,10 @@ def main():
     
     scenario = RansomwareScenario(config, df_normal)
     attack_events = scenario.run(df_normal)
+    
+    from simulator.mitre_mapper import annotate_event_with_mitre
+    attack_events = [annotate_event_with_mitre(e) for e in attack_events]
+    normal_events = [annotate_event_with_mitre(e) for e in normal_events]
     
     combined = normal_events + attack_events
     random.shuffle(combined)
@@ -289,12 +299,12 @@ def main():
     attack_count = len(attack_events)
     pct = (attack_count / total) * 100
     
-    print("\n[Ransomware Scenario]")
+    print(f"\n[Ransomware Scenario] (Intensity: {intensity}x)")
     print(f"  Stage 1 Delivery:    {scenario.stats['delivery']} events")
     print(f"  Stage 2 Discovery:   {scenario.stats['discovery']} events")
-    print(f"  Stage 3 Encryption:  {scenario.stats['encryption']} events  ({len(scenario.discovered_files)} files × 2 events each + 1 note dropper)")
+    print(f"  Stage 3 Encryption:  {scenario.stats['encryption']} events  ({len(scenario.discovered_files)} files x 2 events each + 1 note dropper)")
     print(f"  Stage 4 Impact:      {scenario.stats['impact']} events")
-    print("  " + "─"*37)
+    print("  " + "-"*37)
     print(f"  Total injected:      {attack_count} events into {total - attack_count} normal ({pct:.2f}% rate)\n")
 
 if __name__ == "__main__":

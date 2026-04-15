@@ -209,6 +209,37 @@ def per_attack_metrics(df_feat_test, y_test, y_pred):
         
     return results
 
+def mitre_coverage_report(attack_logs_df):
+    """
+    Analyzes which MITRE techniques were simulated.
+    Returns:
+    - DataFrame of techniques used, with counts
+    - Coverage percentage against common APT techniques
+    - Tactic distribution (pie chart data)
+    """
+    if 'mitre_technique_id' not in attack_logs_df.columns:
+        return pd.DataFrame(), 0.0, {}
+        
+    mitre_events = attack_logs_df[attack_logs_df['mitre_technique_id'] != 'None']
+    # Also drop nans and properly string match None
+    mitre_events = mitre_events[~mitre_events['mitre_technique_id'].isna()]
+    if mitre_events.empty:
+        return pd.DataFrame(), 0.0, {}
+        
+    technique_counts = mitre_events.groupby(['mitre_tactic', 'mitre_technique', 'mitre_technique_id']).size().reset_index(name='count')
+    technique_counts = technique_counts.sort_values(by='count', ascending=False)
+    
+    # Denominator for our APT technique coverage (the 9 defined in config plus a few more)
+    apt_techniques = {'T1595', 'T1110', 'T1078', 'T1005', 'T1486', 'T1039', 'T1052'}
+    simulated_techniques = set(technique_counts['mitre_technique_id'])
+    
+    covered = simulated_techniques.intersection(apt_techniques)
+    coverage_pct = (len(covered) / len(apt_techniques)) * 100 if apt_techniques else 0.0
+    
+    tactic_dist = mitre_events['mitre_tactic'].value_counts().to_dict()
+    
+    return technique_counts, coverage_pct, tactic_dist
+
 def plot_roc_curve(results_dict, save_path="evaluation/roc_comparison.png"):
     """
     Plot ROC curves for one or more models on the same chart.
@@ -419,7 +450,29 @@ if __name__ == "__main__":
                         help="Model to evaluate: supervised, anomaly, or both.")
     parser.add_argument("--features", type=str, default="data/features.csv",
                         help="Path to the features CSV file.")
+    parser.add_argument("--mitre-report", action="store_true", help="Show MITRE coverage report")
     args = parser.parse_args()
+
+    if args.mitre_report:
+        import glob
+        dfs = []
+        for path in glob.glob("data/attack_logs/*.csv"):
+            dfs.append(pd.read_csv(path))
+        if dfs:
+            df_combined = pd.concat(dfs, ignore_index=True)
+            tech_df, coverage, tactic_dist = mitre_coverage_report(df_combined)
+            print("\nMITRE ATT&CK Coverage Report")
+            print("============================")
+            print(f"APT Technique Coverage: {coverage:.1f}%\n")
+            print("Techniques Simulated:")
+            print(tech_df.to_string(index=False) if not tech_df.empty else "None")
+            print("\nTactics Distribution:")
+            for tactic, count in tactic_dist.items():
+                print(f"  {tactic}: {count}")
+            print("\n")
+        else:
+            print("No attack logs found for MITRE report.")
+        sys.exit(0)
 
     results_dict = {}
 
